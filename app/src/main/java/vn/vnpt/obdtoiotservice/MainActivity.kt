@@ -1,4 +1,4 @@
-package  vn.vnpt.obdtoiotservice
+package vn.vnpt.obdtoiotservice
 
 
 import android.Manifest
@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -21,7 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.*
 
-@SuppressLint("MissingPermission") // Quyền đã được kiểm tra và yêu cầu trong hàm checkAndRequestPermissions
+@SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity() {
 
     // --- Biến giao diện ---
@@ -31,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectPidsButton: Button
     private lateinit var obdDataRecyclerView: RecyclerView
     private lateinit var obdDataAdapter: ObdDataAdapter
+    private lateinit var connectMqttButton: Button
+    private lateinit var sendDataButton: Button
 
     // --- Biến quản lý ---
     private lateinit var bluetoothManager: OBDBluetoothManager
@@ -39,8 +42,18 @@ class MainActivity : AppCompatActivity() {
     // --- Biến trạng thái và dữ liệu ---
     private var pairedDeviceList = listOf<BluetoothDevice>()
     private var selectedDevice: BluetoothDevice? = null
-    private var dataPollingJob: Job? = null
     private var isServiceRunning = false
+    private var latestObdDataMap = mutableMapOf<String, String>()
+    private var isMqttConnected = false
+
+    // BIẾN MỚI: Quản lý luồng đọc và gửi dữ liệu
+    private var dataPollingJob: Job? = null
+    private var dataSendingJob: Job? = null
+    private var isSendingData = false
+
+    private lateinit var loopbackTextView: TextView
+
+
 
     private val allSupportedPids = listOf(
         ObdPid("010C", "Vong_tua_may", unit = "rpm"),
@@ -61,15 +74,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Khởi tạo các Manager
         bluetoothManager = OBDBluetoothManager(this)
         mqttManager = MqttManager(this)
 
         setupUI()
         checkAndRequestPermissions()
-
-        // Kết nối MQTT ngay khi ứng dụng khởi động
-        mqttManager.connect()
     }
 
     private fun setupUI() {
@@ -78,6 +87,10 @@ class MainActivity : AppCompatActivity() {
         startStopButton = findViewById(R.id.startStopButton)
         selectPidsButton = findViewById(R.id.selectPidsButton)
         obdDataRecyclerView = findViewById(R.id.obdDataRecyclerView)
+        connectMqttButton = findViewById(R.id.connectMqttButton)
+        sendDataButton = findViewById(R.id.sendDataButton)
+        loopbackTextView = findViewById(R.id.loopbackTextView)
+
 
         obdDataAdapter = ObdDataAdapter(selectedPids)
         obdDataRecyclerView.layoutManager = LinearLayoutManager(this)
@@ -91,9 +104,87 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        selectPidsButton.setOnClickListener {
-            showPidSelectionDialog()
+        selectPidsButton.setOnClickListener { showPidSelectionDialog() }
+
+        connectMqttButton.setOnClickListener {
+            statusTextView.text = "Đang kết nối MQTT..."
+            connectMqttButton.isEnabled = false
+            mqttManager.connect()
+
+            mqttManager.onReadyToPublish = {
+                runOnUiThread {
+                    statusTextView.text = "MQTT đã sẵn sàng."
+                    isMqttConnected = true
+                    sendDataButton.isEnabled = true
+                    connectMqttButton.text = "MQTT Đã kết nối"
+                    Toast.makeText(this, "Kết nối và khởi tạo MQTT thành công!", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+
+            // Thêm xử lý khi kết nối thất bại
+            mqttManager.onConnectionFailure = { error ->
+                runOnUiThread {
+                    statusTextView.text = "Lỗi MQTT: ${error?.message}"
+                    connectMqttButton.isEnabled = true
+                }
+            }
+
+            // CÀI ĐẶT CALLBACK MỚI
+            mqttManager.onTelemetryReceived = { telemetryJson ->
+                runOnUiThread {
+                    // Cập nhật TextView khi nhận được dữ liệu
+                    loopbackTextView.text = telemetryJson
+                }
+            }
         }
+
+        // --- CẬP NHẬT LOGIC NÚT GỬI DỮ LIỆU ---
+        sendDataButton.setOnClickListener {
+            if (isSendingData) {
+                stopDataSending()
+            } else {
+                startDataSending()
+            }
+        }
+    }
+
+    // --- HÀM MỚI: Bắt đầu gửi dữ liệu theo chu kỳ ---
+    private fun startDataSending() {
+        if (!isServiceRunning) {
+            Toast.makeText(this, "Vui lòng 'Bắt đầu đọc' dữ liệu từ xe trước", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isMqttConnected) {
+            Toast.makeText(this, "MQTT chưa kết nối.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        dataSendingJob?.cancel()
+        dataSendingJob = CoroutineScope(Dispatchers.IO).launch {
+            Log.d("DataSending", "Bắt đầu chu kỳ gửi dữ liệu...")
+            withContext(Dispatchers.Main) {
+                isSendingData = true
+                sendDataButton.text = "Dừng gửi"
+            }
+            while (isActive) {
+                if (latestObdDataMap.isNotEmpty()) {
+                    Log.d("DataSending", "Đang gửi dữ liệu: $latestObdDataMap")
+                    mqttManager.publishTelemetry(latestObdDataMap)
+                } else {
+                    Log.d("DataSending", "Bỏ qua vì chưa có dữ liệu.")
+                }
+                delay(10000) // Chờ 10 giây
+            }
+        }
+    }
+
+    // --- HÀM MỚI: Dừng gửi dữ liệu theo chu kỳ ---
+    private fun stopDataSending() {
+        dataSendingJob?.cancel()
+        isSendingData = false
+        sendDataButton.text = "Bắt đầu gửi"
+        Log.d("DataSending", "Đã dừng chu kỳ gửi dữ liệu.")
     }
 
     private fun startDataPolling() {
@@ -106,49 +197,36 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Gán callback: Khi MQTT sẵn sàng, nó sẽ tự động bắt đầu vòng lặp lấy dữ liệu
-        mqttManager.onReadyToPublish = {
-            dataPollingJob?.cancel()
-            dataPollingJob = CoroutineScope(Dispatchers.IO).launch {
-                // Khởi tạo thiết bị trước khi vào vòng lặp
-                bluetoothManager.sendCommand("ATZ")
-                bluetoothManager.readResponse()
-                bluetoothManager.sendCommand("ATE0")
-                bluetoothManager.readResponse()
+        statusTextView.text = "Đang kết nối Bluetooth..."
+        dataPollingJob?.cancel()
+        dataPollingJob = CoroutineScope(Dispatchers.IO).launch {
+            if (bluetoothManager.connect(selectedDevice!!)) {
+                withContext(Dispatchers.Main) {
+                    statusTextView.text = "Bluetooth đã kết nối. Bắt đầu lấy dữ liệu."
+                    isServiceRunning = true
+                    startStopButton.text = "Dừng đọc"
+                }
+
+                bluetoothManager.sendCommand("ATZ"); bluetoothManager.readResponse()
+                bluetoothManager.sendCommand("ATE0"); bluetoothManager.readResponse()
 
                 while (isActive) {
-                    val obdDataMap = mutableMapOf<String, String>()
                     val currentPidStates = selectedPids.map { it.copy() }
+                    val tempDataMap = mutableMapOf<String, String>()
 
                     currentPidStates.forEach { pid ->
                         bluetoothManager.sendCommand(pid.command)
                         val response = bluetoothManager.readResponse()
                         pid.value = parseObdResponse(pid.command, response)
-                        obdDataMap[pid.name] = pid.value
+                        tempDataMap[pid.name] = pid.value
                     }
-
-                    // Gửi dữ liệu qua MQTT
-                    mqttManager.publishTelemetry(obdDataMap)
+                    latestObdDataMap = tempDataMap
 
                     withContext(Dispatchers.Main) {
                         obdDataAdapter.updateData(currentPidStates)
                     }
-                    delay(10000) // Chờ 10 giây
+                    delay(5000)
                 }
-            }
-        }
-
-        statusTextView.text = "Đang kết nối Bluetooth..."
-        CoroutineScope(Dispatchers.IO).launch {
-            if (bluetoothManager.connect(selectedDevice!!)) {
-                withContext(Dispatchers.Main) {
-                    statusTextView.text = "Bluetooth đã kết nối. Chờ MQTT sẵn sàng..."
-                    isServiceRunning = true
-                    startStopButton.text = "Dừng"
-                }
-                // Yêu cầu MQTT kiểm tra và bắt đầu flow khởi tạo.
-                // Khi xong, callback onReadyToPublish sẽ được gọi và bắt đầu vòng lặp.
-                mqttManager.initialSetupFlow()
             } else {
                 withContext(Dispatchers.Main) {
                     statusTextView.text = "Kết nối Bluetooth thất bại!"
@@ -162,9 +240,17 @@ class MainActivity : AppCompatActivity() {
         bluetoothManager.disconnect()
         isServiceRunning = false
         statusTextView.text = "Đã dừng"
-        startStopButton.text = "Bắt đầu"
+        startStopButton.text = "Bắt đầu đọc"
+        latestObdDataMap.clear()
+        obdDataAdapter.updateData(emptyList())
+
+        // Tích hợp: Dừng gửi dữ liệu khi dừng đọc
+        if (isSendingData) {
+            stopDataSending()
+        }
     }
 
+    // ... các hàm còn lại giữ nguyên (showPidSelectionDialog, parseObdResponse, checkAndRequestPermissions, ...)
     private fun showPidSelectionDialog() {
         val pidNames = allSupportedPids.map { it.name.replace("_", " ") }.toTypedArray()
         val checkedItems = allSupportedPids.map { selectedPids.any { s -> s.command == it.command } }.toBooleanArray()
@@ -200,7 +286,7 @@ class MainActivity : AppCompatActivity() {
         return try {
             when (command) {
                 "010D" -> hexData.toInt(16).toString()
-                "010C" -> ((hexData.substring(0, 2).toInt(16) * 256) + hexData.substring(2, 4).toInt(16)) / 4).toString()
+                "010C" -> (((hexData.substring(0, 2).toInt(16) * 256) + hexData.substring(2, 4).toInt(16)) / 4).toString()
                 "0105", "010F" -> (hexData.toInt(16) - 40).toString()
                 "0104", "0111" -> "%.1f".format(hexData.toInt(16) * 100 / 255.0)
                 "015E" -> "%.2f".format(((hexData.substring(0, 2).toInt(16) * 256) + hexData.substring(2, 4).toInt(16)) / 20.0)
@@ -278,6 +364,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopDataPolling()
-        mqttManager.disconnect()
+        if (isMqttConnected) {
+            mqttManager.disconnect()
+        }
     }
 }

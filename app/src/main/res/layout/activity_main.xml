@@ -45,17 +45,61 @@
 
         <Button
             android:id="@+id/selectPidsButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:text="Chọn Thông số" />
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="Chọn PIDs" />
 
         <Button
             android:id="@+id/startStopButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Bắt đầu" />
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="Bắt đầu đọc" />
     </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/connectMqttButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="Kết nối MQTT" />
+
+        <Button
+            android:id="@+id/sendDataButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="Gửi dữ liệu"
+            android:enabled="false" /> </LinearLayout>
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Dữ liệu nhận lại từ Platform (Loopback Test):"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/loopbackTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:padding="8dp"
+        android:background="#E0E0E0"
+        android:text="-- Chờ dữ liệu --"
+        android:textColor="@color/black"
+        android:typeface="monospace"/>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/obdDataRecyclerView"
