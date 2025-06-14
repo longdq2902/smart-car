@@ -1,5 +1,6 @@
 package vn.vnpt.obdtoiotservice
 
+import java.io.Serializable
 
 // Data class để biểu diễn một thông số OBD
 data class ObdPid(
@@ -7,4 +8,4 @@ data class ObdPid(
     val name: String,             // Tên hiển thị, ví dụ: "Vòng tua máy"
     var value: String = "--",     // Giá trị hiện tại, mặc định là "--"
     val unit: String = ""         // Đơn vị, ví dụ: "rpm", "km/h"
-)
+) : Serializable // <-- THÊM DÒNG NÀY

@@ -11,7 +11,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Trạng thái"
+        android:text="Trạng thái OBD"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -73,33 +73,45 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
-            android:text="Kết nối MQTT" />
+            android:text="Bắt đầu gửi MQTT" />
 
-        <Button
-            android:id="@+id/sendDataButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="Gửi dữ liệu"
-            android:enabled="false" /> </LinearLayout>
+<!--        <Button-->
+<!--            android:id="@+id/sendDataButton"-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="1"-->
+<!--            android:layout_marginStart="4dp"-->
+<!--            android:text="Gửi (Tự động)"-->
+<!--            android:enabled="false" />-->
+    </LinearLayout>
+
     <TextView
+        android:id="@+id/mqttStatusTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Dữ liệu nhận lại từ Platform (Loopback Test):"
-        android:textStyle="bold"/>
+        android:layout_marginTop="8dp"
+        android:text="MQTT: Đã dừng"
+        android:textColor="#008EFF"
+        android:textSize="18sp" />
 
-    <TextView
-        android:id="@+id/loopbackTextView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:padding="8dp"
-        android:background="#E0E0E0"
-        android:text="-- Chờ dữ liệu --"
-        android:textColor="@color/black"
-        android:typeface="monospace"/>
+
+<!--    <TextView-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="16dp"-->
+<!--        android:text="Dữ liệu nhận lại từ Platform (Loopback Test):"-->
+<!--        android:textStyle="bold"/>-->
+
+<!--    <TextView-->
+<!--        android:id="@+id/loopbackTextView"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="4dp"-->
+<!--        android:padding="8dp"-->
+<!--        android:background="#E0E0E0"-->
+<!--        android:text="&#45;&#45; Chờ dữ liệu &#45;&#45;"-->
+<!--        android:textColor="@color/black"-->
+<!--        android:typeface="monospace"/>-->
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/obdDataRecyclerView"
